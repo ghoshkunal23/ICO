@@ -249,7 +249,7 @@ export default function BuyCoin() {
             clearInterval(interval);
           }
         };
-      }, [contract]);
+    }, [contract]);
 
     if (!currentPhase) {
         return <p>Loading phase details...</p>;
@@ -341,8 +341,6 @@ export default function BuyCoin() {
                     </button>
                 </div>
             )}
-
-
         </div>
     );
 }

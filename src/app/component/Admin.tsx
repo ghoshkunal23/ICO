@@ -45,16 +45,13 @@ export default function AdminPanel() {
   const [buyers, setBuyers] = useState<Buyer[]>([]);
   const [seedRoundBuyers, setSeedRoundBuyers] = useState<string[]>([]);
   const [currentPhase, setCurrentPhase] = useState<string | null>(null);
-  const [extraTime, setExtraTime] = useState<number>(0);
+  const [extraTime, setExtraTime] = useState<number>();
   const [totalCollectedFunds, setTotalCollectedFunds] = useState<number>();
   const [coinsSold, setCoinsSold] = useState<number>(0);
   const [phaseOverview, setPhaseOverview] = useState<PhaseOverview[]>([]);
   const [confirmedBuyers, setConfirmedBuyers] = useState<string[]>([]);
   const [storedAddress, setStoredAddress] = useState<string[]>([]);
   const { walletAddress, contract } = useAppContext();
-  const [isPaused, setIsPaused] = useState<boolean>(false);
-  const [pauseStartTime, setPauseStartTime] = useState<number | null>(null);
-  const [totalPauseTime, setTotalPauseTime] = useState<number>(0);
 
   useEffect(() => {
     if (contract) {
@@ -77,7 +74,7 @@ export default function AdminPanel() {
       setPhaseDetails({
         phaseName: details[0],
         phaseCoin: details[1],
-        remainingCoin:details[2],
+        remainingCoin: details[2],
         phaseTarget: ethers.formatEther(details[3]),
         startingTime: new Date(Number(details[4]) * 1000).toLocaleString(),
         endingTime: new Date(Number(details[5]) * 1000).toLocaleString(),
@@ -384,22 +381,19 @@ export default function AdminPanel() {
     return `${hours}h ${minutes}m ${secondsLeft}s`;
   };
 
-  const stopSale = async () => {
+  const endPhase = async () => {
     if (!contract) return;
-  
+
     try {
-      await contract.stopSale();
-      setIsPaused(true);
-      setPauseStartTime(await contract.pausedTime());
+      await contract.endSale();
       Swal.fire({
         icon: 'success',
         title: 'Sale Stopped',
         text: 'The sale has been successfully paused.',
       });
     } catch (error) {
-      // Handle specific error messages
       const errorMessage = error?.reason || error?.data?.message || error?.message;
-  
+
       if (errorMessage === "Sale is already stopped") {
         Swal.fire({
           icon: "error",
@@ -415,40 +409,9 @@ export default function AdminPanel() {
           confirmButtonColor: "#d33",
         });
       }
-  
+
       console.error("Error stopping sale:", error);
     }
-  };
-  
-
-  const resumeSale = async () => {
-    if (!contract || !pauseStartTime) return;
-    try {
-      await contract.resumeSale();
-      setIsPaused(false);
-      const pauseDuration = (Date.now() - pauseStartTime) / 1000; // Convert to seconds
-      setTotalPauseTime(prevTime => prevTime + pauseDuration);
-      setPauseStartTime(null);
-      Swal.fire({
-        icon: 'success',
-        title: 'Sale Resumed',
-        text: 'The sale has been successfully resumed.',
-      });
-    } catch (error) {
-      console.error("Error resuming sale", error);
-      Swal.fire({
-        icon: 'error',
-        title: 'Error',
-        text: 'There was an error resuming the sale. Please try again.',
-      });
-    }
-  };
-
-  const formatPauseTime = (seconds: number): string => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const remainingSeconds = Math.floor(seconds % 60);
-    return `${hours}h ${minutes}m ${remainingSeconds}s`;
   };
 
   // Chart data
@@ -484,9 +447,10 @@ export default function AdminPanel() {
       <h1 className="text-center font-bold text-gray-800 mb-6">Admin Dashboard</h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-        {/* Update, Extend, Stop, and Resume Sale */}
+        {/* Update, Extend, End Phase */}
         <div className="lg:col-span-1 bg-white p-4 rounded-lg shadow-sm">
-          <div className="flex flex-col space-y-4">
+          <h1 className="text-center font-bold text-gray-800 mb-6">Access in One Click</h1>
+          <div className="flex flex-col space-y-8">
             <button onClick={updatePhase} className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
               Update Phase
             </button>
@@ -495,28 +459,19 @@ export default function AdminPanel() {
                 type="number"
                 value={extraTime}
                 onChange={(e) => setExtraTime(Number(e.target.value))}
-                className="flex-grow border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex-grow border text-gray-800 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Time in seconds"
               />
               <button onClick={extendPhase} className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">
                 Extend Phase
               </button>
             </div>
-            <button 
-              onClick={isPaused ? resumeSale : stopSale} 
-              className={`w-full px-4 py-2 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-                isPaused 
-                  ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500' 
-                  : 'bg-red-600 hover:bg-red-700 focus:ring-red-500'
-              }`}
+            <button
+              onClick={endPhase}
+              className={"w-full px-4 py-2 text-white rounded-md bg-red-600 focus:outline-none focus:ring-2 focus:ring-offset-2 'bg-red-600 hover:bg-red-700 focus:ring-red-500"}
             >
-              {isPaused ? 'Resume Sale' : 'Stop Sale'}
+              End Current Phase
             </button>
-            <div className="text-sm font-medium text-gray-500">
-              Total Pause Time: {formatPauseTime(Number(totalPauseTime) + (isPaused && pauseStartTime ? (Date.now() - Number(pauseStartTime)) / 1000 : 0)
-)}
-
-            </div>
           </div>
         </div>
 
@@ -544,7 +499,7 @@ export default function AdminPanel() {
               <div>
                 <p className="text-sm font-medium text-gray-500">Remaining Coin</p>
                 <p className="text-lg font-semibold text-gray-800">{phaseDetails.remainingCoin}</p>
-              </div> 
+              </div>
               <div>
                 <p className="text-sm font-medium text-gray-500">Remaining Time</p>
                 <p className="text-lg font-semibold text-gray-800">{phaseDetails.remainingTime}</p>
@@ -569,10 +524,6 @@ export default function AdminPanel() {
             <div className="mb-4">
               <p className="text-sm font-medium text-gray-500">Coins Sold</p>
               <p className="text-2xl font-bold text-gray-800">{coinsSold}</p>
-            </div>
-            <div className="mb-4">
-              <p className="text-sm font-medium text-gray-500">Total Pause Time</p>
-              <p className="text-2xl font-bold text-gray-800">{formatPauseTime(totalPauseTime)}</p>
             </div>
             <button onClick={finalizeSale} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">
               Finalize Sale
@@ -659,26 +610,29 @@ export default function AdminPanel() {
       {/* Phase Overview */}
       <div className="bg-white p-6 rounded-lg shadow-sm">
         <h2 className="text-2xl font-semibold mb-4 text-gray-800">Phase Overview</h2>
-        <div className="mb-6" style={{ height: '300px' }}>
-          <Bar
-            data={phaseOverviewData}
-            options={{
-              responsive: true,
-              maintainAspectRatio: false,
-              scales: {
-                y: {
-                  beginAtZero: true
-                }
-              }
-            }}
-          />
+        {/* Bar Chart Section */}
+        <div className="mb-6 flex justify-center">
+          <div style={{ height: '300px', width: '600px' }}>
+            <Bar
+              data={phaseOverviewData}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                  },
+                },
+              }}
+            />
+          </div>
         </div>
+        {/* Table Section */}
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phase</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Coins</th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Target</th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start Time</th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">End Time</th>
@@ -691,13 +645,15 @@ export default function AdminPanel() {
               {phaseOverview.map((phase, index) => (
                 <tr key={index}>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{phase.phaseName}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{phase.phaseCoin}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{phase.phaseTarget}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{phase.startingTime}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{phase.endingTime}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{phase.coinPrice}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${phase.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                    <span
+                      className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${phase.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        }`}
+                    >
                       {phase.isActive ? 'Active' : 'Inactive'}
                     </span>
                   </td>
@@ -709,7 +665,7 @@ export default function AdminPanel() {
         </div>
       </div>
     </div>
-  // </div>
+    // </div>
   );
 }
 
