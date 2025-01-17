@@ -6,7 +6,7 @@ import { useState , useEffect } from "react";
 type NavbarProps = {
   isadmin: boolean;
   setActiveSection: (section: string) => void;
-  activeSection: string; // Add activeSection prop to track the current section
+  activeSection: string;
 };
 
 export default function Navbar({
@@ -34,7 +34,7 @@ const fetchAdminDetails = async () => {
     if (!contract) return;
 
     try {
-        const ownerAddress = await contract.owner(); // Get admin address from contract
+        const ownerAddress = await contract.owner();
         setAdminAddress(ownerAddress);
     } catch (error) {
         console.error("Error fetching admin address:", error);

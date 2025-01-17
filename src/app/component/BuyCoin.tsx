@@ -107,7 +107,7 @@ export default function BuyCoin() {
             });
             return;
         }
-
+    
         if (!contract) {
             Swal.fire({
                 icon: "error",
@@ -117,10 +117,10 @@ export default function BuyCoin() {
             });
             return;
         }
-
+    
         try {
             const amountInWei = ethers.parseUnits(amount.toString(), "ether");
-
+    
             const result = await Swal.fire({
                 title: "Are you sure?",
                 text: `You are about to buy ${coin} coins for ${amount} ETH.`,
@@ -130,17 +130,17 @@ export default function BuyCoin() {
                 cancelButtonColor: "#d33",
                 confirmButtonText: "Yes, buy it!",
             });
-
+    
             if (!result.isConfirmed) {
                 return;
             }
-
+    
             const tx = await contract.buyCoin(coin, {
                 value: amountInWei,
             });
-
+    
             await tx.wait();
-
+    
             Swal.fire({
                 icon: "success",
                 title: "Transaction Successful",
@@ -148,16 +148,27 @@ export default function BuyCoin() {
                 confirmButtonColor: "#3085d6",
             });
             console.log("Transaction successful:", tx);
-        } catch (error) {
-            Swal.fire({
-                icon: "error",
-                title: "Transaction Failed",
-                text: `Error buying coin: ${error.message || error}`,
-                confirmButtonColor: "#d33",
-            });
+        } catch (error: any) {
+            // Check for "Sale has ended" error message
+            if (error?.reason === "Sale has ended") {
+                Swal.fire({
+                    icon: "error",
+                    title: "Sale has Ended",
+                    text: "The sale for this phase has ended. Please check the next phase.",
+                    confirmButtonColor: "#d33",
+                });
+            } else {
+                Swal.fire({
+                    icon: "error",
+                    title: "Transaction Failed",
+                    text: `Error buying coin: ${error.message || error}`,
+                    confirmButtonColor: "#d33",
+                });
+            }
             console.error("Error buying coin:", error);
         }
     };
+    
 
     // Apply for Seed Round
     const applySeedRound = async () => {

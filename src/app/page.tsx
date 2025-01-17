@@ -63,20 +63,8 @@ export default function Home( { isAdmin: boolean }) {
       </div>
     ) : (
       <div className="flex flex-1 items-center justify-center">
-        {/* Render the selected section */}
-        {/* <div className="w-full max-w-4xl bg-gray-900 p-6 rounded-lg shadow-lg"> */}
           {renderSection()}
-          {/* {activeSection === "dashboard" && (
-              <Dashboard />
-          )} */}
-          {/* {activeSection === "buycoin" && (
-              <BuyCoin />
-          )}
-          {activeSection === "buyerdetails" && (
-              <BuyerDetails />
-          )} */}
         </div>
-      // </div>
     )}
   </main>
 </div>

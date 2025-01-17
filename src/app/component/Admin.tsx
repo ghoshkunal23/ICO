@@ -1,23 +1,27 @@
-"use client";
-import React, { useEffect, useState } from "react";
-import { ethers } from "ethers";
-import { useAppContext } from "../context/AppContext";
-import Swal from "sweetalert2";
+"use client"
+import React, { useState, useEffect } from 'react';
+import { ethers } from 'ethers';
+import Swal from 'sweetalert2';
+import { Bar, Pie } from 'react-chartjs-2';
+import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement, ChartData } from 'chart.js';
+import { useAppContext } from '../context/AppContext';
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement);
 
 interface PhaseDetails {
   phaseName: string;
   phaseCoin: string;
   remainingCoin: string;
   phaseTarget: string;
-  startingTime: number;
-  endingTime: number;
+  startingTime: string;
+  endingTime: string;
   phaseCoinPrice: string;
   isActive: boolean;
   remainingTime: string;
-  phaseCollectedFund: string;
+  phaseCollectedFund: number;
 }
 
-interface BuyerDetails {
+interface Buyer {
   buyerAddress: string;
   totalCoinsPurchased: string;
   totalAmountSpent: string;
@@ -27,170 +31,119 @@ interface PhaseOverview {
   phaseName: string;
   phaseCoin: string;
   remainingCoin: string;
+  phaseTarget: string;
+  startingTime: string;
+  endingTime: string;
+  coinPrice: string;
+  isActive: boolean;
   collectedFund: string;
 }
 
-
-export default function Admin() {
-  const { walletAddress, contract } = useAppContext();
+export default function AdminPanel() {
+  // State variables
   const [phaseDetails, setPhaseDetails] = useState<PhaseDetails | null>(null);
-  const [buyers, setBuyers] = useState<BuyerDetails[]>([]);
+  const [buyers, setBuyers] = useState<Buyer[]>([]);
   const [seedRoundBuyers, setSeedRoundBuyers] = useState<string[]>([]);
-  const [currentPhase, setCurrentPhase] = useState<PhaseDetails | null>(null);
+  const [currentPhase, setCurrentPhase] = useState<string | null>(null);
   const [extraTime, setExtraTime] = useState<number>(0);
-  const [totalCollectedFunds, setTotalCollectedFunds] = useState<string>();
-  const [coinsSold, setCoinsSold] = useState<number>();
+  const [totalCollectedFunds, setTotalCollectedFunds] = useState<number>();
+  const [coinsSold, setCoinsSold] = useState<number>(0);
   const [phaseOverview, setPhaseOverview] = useState<PhaseOverview[]>([]);
   const [confirmedBuyers, setConfirmedBuyers] = useState<string[]>([]);
-  const [storedAddress, SetStoredAddress] = useState<string[]>([]);
-
-
-  useEffect(() => {
-    const fetchDetails = async () => {
-      if (contract) {
-        await fetchPhaseDetails(contract);
-        await fetchBuyers(contract);
-        await fetchSeedRoundBuyers(contract);
-        await fetchPhaseOverview(contract);
-        await fetchStoredAddress(contract);
-        await fetchConfirmedBuyers(contract)
-
-        // const handleSeedRoundApplication = (buyer: string) => {
-        //   console.log(`New seed round application from: ${buyer}`);
-
-        //   // Avoid duplicates in the list
-        //   setSeedRoundBuyers((prevBuyers) => {
-        //     if (!prevBuyers.includes(buyer)) {
-        //       return [...prevBuyers, buyer];
-        //     }
-        //     return prevBuyers;
-        //   });
-        // };
-
-        // // Attach event listener to the contract
-        // contract.on("SeedRoundApplication", handleSeedRoundApplication);
-
-        // // Cleanup function to remove the listener
-        // return () => {
-        //   contract.off("SeedRoundApplication", handleSeedRoundApplication);
-        // };
-      }
-    };
-    fetchDetails();
-    fetchTotalCollectedFund();
-    fetchTotalCoinSold();
-    fetchRemainingTime();
-  }, [contract]);
+  const [storedAddress, setStoredAddress] = useState<string[]>([]);
+  const { walletAddress, contract } = useAppContext();
+  const [isPaused, setIsPaused] = useState<boolean>(false);
+  const [pauseStartTime, setPauseStartTime] = useState<number | null>(null);
+  const [totalPauseTime, setTotalPauseTime] = useState<number>(0);
 
   useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-  
-    const startTimer = async () => {
-      if (contract) {
-        await fetchRemainingTime(); // Fetch initial value
-        interval = setInterval(fetchRemainingTime, 1000); // Update every second
-      }
-    };
-  
-    startTimer();
-  
-    // Cleanup interval on component unmount
-    return () => {
-      if (interval) {
-        clearInterval(interval);
-      }
-    };
+    if (contract) {
+      fetchPhaseDetails();
+      fetchBuyers();
+      fetchSeedRoundBuyers();
+      fetchPhaseOverview();
+      fetchStoredAddress();
+      fetchConfirmedBuyers();
+      fetchTotalCollectedFund();
+      fetchTotalCoinSold();
+      fetchRemainingTime();
+    }
   }, [contract]);
-  
 
-  // Current Phase Deatsils Section
-  const fetchPhaseDetails = async (contract: ethers.Contract) => {
+  const fetchPhaseDetails = async () => {
+    if (!contract) return;
     try {
       const details = await contract.getCurrentPhaseDetails();
-
       setPhaseDetails({
         phaseName: details[0],
         phaseCoin: details[1],
-        remainingCoin: ethers.formatEther(details[2]),
+        remainingCoin:details[2],
         phaseTarget: ethers.formatEther(details[3]),
-        startingTime: Number(details[4]),
-        endingTime: Number(details[5]),
+        startingTime: new Date(Number(details[4]) * 1000).toLocaleString(),
+        endingTime: new Date(Number(details[5]) * 1000).toLocaleString(),
         phaseCoinPrice: ethers.formatEther(details[6]),
         isActive: details[7],
         remainingTime: "",
-        phaseCollectedFund: ethers.formatEther(details[8]),
+        phaseCollectedFund: parseFloat(ethers.formatEther(details[8])),
       });
       setCurrentPhase(details[0]);
     } catch (error) {
       console.error("Error fetching phase details", error);
     }
   };
-  // Remaining Time Part
-  const fetchRemainingTime = async () => {
-    try {
-      if (contract) {
-        const remainingTimeInSeconds = await contract.getRemainingTimeInStage();
-        const remainingTimeFormatted = formatRemainingTime(remainingTimeInSeconds);
 
-        setPhaseDetails((prevDetails) =>
-          prevDetails
-            ? { ...prevDetails, remainingTime: remainingTimeFormatted }
-            : null
-        );
-      }
-    } catch (error) {
-      console.error("Error fetching remaining time:", error);
-    }
-  };
-
-  const formatRemainingTime = (remainingTimeInSeconds: ethers.BigNumberish): string => {
-    const seconds = Number(remainingTimeInSeconds);
-    if (seconds <= 0) {
-      return "Phase has ended";
-    }
-
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secondsLeft = seconds % 60;
-
-    return `${hours}h ${minutes}m ${secondsLeft}s`;
-  };
-
-  // Change The Phase
   const updatePhase = async () => {
     if (contract) {
       try {
         await contract.updateStage();
-        await fetchPhaseDetails(contract);
+        await fetchPhaseDetails();
+        Swal.fire({
+          icon: 'success',
+          title: 'Phase Updated',
+          text: 'The phase has been successfully updated.',
+        });
       } catch (error) {
         console.error("Error updating phase", error);
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'There was an error updating the phase. Please try again.',
+        });
       }
     }
   };
 
-  // Extend Phase Time
   const extendPhase = async () => {
     if (contract && extraTime > 0) {
       try {
         await contract.extendPhaseDuration(extraTime);
-        await fetchPhaseDetails(contract);
+        await fetchPhaseDetails();
+        Swal.fire({
+          icon: 'success',
+          title: 'Phase Extended',
+          text: `The phase has been extended by ${extraTime} seconds.`,
+        });
       } catch (error) {
         console.error("Error extending phase", error);
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'There was an error extending the phase. Please try again.',
+        });
       }
     }
   };
 
-  // Buyers Details Section
-
-  const fetchBuyers = async (contract: ethers.Contract) => {
+  const fetchBuyers = async () => {
+    if (!contract) return;
     try {
-      const buyerAddresses = await contract.getBuyerAddresses();
+      const buyerAddresses: string[] = await contract.getBuyerAddresses();
       const buyerDetails = await Promise.all(
-        buyerAddresses.map(async (address: string) => {
+        buyerAddresses.map(async (address) => {
           const details = await contract.getBuyerDetails(address);
           return {
             buyerAddress: address,
-            totalCoinsPurchased: details[0],
+            totalCoinsPurchased: details[0].toString(),
             totalAmountSpent: ethers.formatEther(details[1]),
           };
         })
@@ -201,11 +154,10 @@ export default function Admin() {
     }
   };
 
-  //  Applyed Buyer Section for Seed Phase
-
-  const fetchSeedRoundBuyers = async (contract: ethers.Contract) => {
+  const fetchSeedRoundBuyers = async () => {
+    if (!contract) return;
     try {
-      const seedRoundBuyerAddresses = await contract.getApplySeedRoundBuyer();
+      const seedRoundBuyerAddresses: string[] = await contract.getApplySeedRoundBuyer();
       setSeedRoundBuyers(seedRoundBuyerAddresses);
     } catch (error) {
       console.error("Error fetching seed round buyers", error);
@@ -214,114 +166,91 @@ export default function Admin() {
 
   const handleConfirmSeedBuyer = async (buyerAddress: string) => {
     if (contract) {
-        try {
-            // Confirmation dialog
-            const result = await Swal.fire({
-                title: 'Are you sure?',
-                text: `You are about to confirm ${buyerAddress} as a buyer.`,
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonText: 'Yes, confirm!',
-                cancelButtonText: 'Cancel',
-            });
-
-            if (result.isConfirmed) {
-                // Add buyer to the contract's allowed list
-                await contract.addAllowedBuyer(buyerAddress);
-
-                // Update local states
-                setSeedRoundBuyers((prevBuyers) =>
-                    prevBuyers.filter((address) => address !== buyerAddress)
-                );
-
-                SetStoredAddress((prevAdd) =>
-                    prevAdd.filter((address) => address !== buyerAddress)
-                );
-
-                // Sync the front-end state with the contract's state
-                await fetchSeedRoundBuyers(contract);
-                fetchConfirmedBuyers(contract);
-
-                // Success notification
-                await Swal.fire({
-                    title: 'Confirmed!',
-                    text: `${buyerAddress} has been added as a buyer.`,
-                    icon: 'success',
-                });
-            }
-        } catch (error) {
-            console.error('Error confirming seed buyer', error);
-
-            // Error notification
-            await Swal.fire({
-                title: 'Error',
-                text: 'There was an error confirming the buyer. Please try again.',
-                icon: 'error',
-            });
-        }
-    }
-};
-
-
-const handleCancelSeedBuyer = async (buyerAddress: string) => {
-  if (contract) {
       try {
-          const result = await Swal.fire({
-              title: 'Are you sure?',
-              text: `You are about to cancel ${buyerAddress} as a buyer.`,
-              icon: 'warning',
-              showCancelButton: true,
-              confirmButtonText: 'Yes, cancel!',
-              cancelButtonText: 'Cancel',
-          });
+        const result = await Swal.fire({
+          title: 'Are you sure?',
+          text: `You are about to confirm ${buyerAddress} as a buyer.`,
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonText: 'Yes, confirm!',
+          cancelButtonText: 'Cancel',
+        });
 
-          if (result.isConfirmed) {
-              // Remove the buyer from the list in the front-end
-              setSeedRoundBuyers((prevBuyers) =>
-                  prevBuyers.filter((address) => address !== buyerAddress)
-              );
+        if (result.isConfirmed) {
+          await contract.addAllowedBuyer(buyerAddress);
+          setSeedRoundBuyers((prevBuyers) =>
+            prevBuyers.filter((address) => address !== buyerAddress)
+          );
+          setStoredAddress((prevAdd) =>
+            prevAdd.filter((address) => address !== buyerAddress)
+          );
+          await fetchSeedRoundBuyers();
+          fetchConfirmedBuyers();
 
-              SetStoredAddress((prevAdd) =>
-                  prevAdd.filter((address) => address !== buyerAddress)
-              );
-
-              // Sync front-end state with the contract's state
-              await fetchSeedRoundBuyers(contract);
-
-              // Success notification
-              await Swal.fire({
-                  title: 'Canceled!',
-                  text: `${buyerAddress} has been removed from the applicants' list.`,
-                  icon: 'success',
-              });
-          }
-      } catch (error) {
-          console.error('Error canceling seed buyer', error);
-
-          // Error notification
           await Swal.fire({
-              title: 'Error',
-              text: 'There was an error canceling the buyer. Please try again.',
-              icon: 'error',
+            title: 'Confirmed!',
+            text: `${buyerAddress} has been added as a buyer.`,
+            icon: 'success',
           });
+        }
+      } catch (error) {
+        console.error('Error confirming seed buyer', error);
+        await Swal.fire({
+          title: 'Error',
+          text: 'There was an error confirming the buyer. Please try again.',
+          icon: 'error',
+        });
       }
-  }
-};
+    }
+  };
 
+  const handleCancelSeedBuyer = async (buyerAddress: string) => {
+    if (contract) {
+      try {
+        const result = await Swal.fire({
+          title: 'Are you sure?',
+          text: `You are about to cancel ${buyerAddress} as a buyer.`,
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonText: 'Yes, cancel!',
+          cancelButtonText: 'Cancel',
+        });
 
+        if (result.isConfirmed) {
+          setSeedRoundBuyers((prevBuyers) =>
+            prevBuyers.filter((address) => address !== buyerAddress)
+          );
+          setStoredAddress((prevAdd) =>
+            prevAdd.filter((address) => address !== buyerAddress)
+          );
+          await fetchSeedRoundBuyers();
 
-  // Confirm Buyer List For Seed Phase
+          await Swal.fire({
+            title: 'Canceled!',
+            text: `${buyerAddress} has been removed from the applicants' list.`,
+            icon: 'success',
+          });
+        }
+      } catch (error) {
+        console.error('Error canceling seed buyer', error);
+        await Swal.fire({
+          title: 'Error',
+          text: 'There was an error canceling the buyer. Please try again.',
+          icon: 'error',
+        });
+      }
+    }
+  };
 
-  const fetchConfirmedBuyers = async (contract: ethers.Contract) => {
+  const fetchConfirmedBuyers = async () => {
+    if (!contract) return;
     try {
-      const confirmedBuyerAddresses = await contract.getAllowedSheedphaseBuyers();
+      const confirmedBuyerAddresses: string[] = await contract.getAllowedSheedphaseBuyers();
       setConfirmedBuyers(confirmedBuyerAddresses);
     } catch (error) {
       console.error("Error fetching confirmed buyers", error);
     }
   };
-
-  // Sale Finalized Section
 
   const finalizeSale = async () => {
     if (!contract) {
@@ -362,54 +291,51 @@ const handleCancelSeedBuyer = async (buyerAddress: string) => {
       Swal.fire({
         icon: "error",
         title: "Finalization Failed",
-        text: `An error occurred: ${error.message || error}`,
+        text: `An error occurred: ${(error as Error).message || error}`,
         confirmButtonColor: "#d33",
       });
       console.error("Error finalizing sale:", error);
     }
   };
-  // Total Collected FUnd 
+
   const fetchTotalCollectedFund = async () => {
+    if (!contract) return;
     try {
       const totalFund = await contract.totalCollectedFunds();
-      setTotalCollectedFunds(ethers.formatEther(totalFund.toString()),);
+      setTotalCollectedFunds(parseFloat(ethers.formatEther((totalFund))));
     } catch (error) {
       console.error("Error fetching Total Collected Fund", error);
     }
   };
-  // Total Sold Coin
+
   const fetchTotalCoinSold = async () => {
+    if (!contract) return;
     try {
       const totalCoin = await contract.coinsSold();
-      setCoinsSold(totalCoin);
+      setCoinsSold(parseFloat(totalCoin));
     } catch (error) {
       console.error("Error fetching Total Coin Sold", error);
     }
   };
 
-  // Sale Over View Section
-
-  const fetchPhaseOverview = async (contract) => {
+  const fetchPhaseOverview = async () => {
+    if (!contract) return;
     try {
       const phases = ["seedPhase", "PreICO", "ICO", "Completed"];
-
-
       const overview = await Promise.all(
-        phases.map(async (_phaseKey, index) => {
+        phases.map(async (_, index) => {
           const phaseDetails = await contract.getPhaseDetails(index);
-          console.log('Phase Details:', phaseDetails);
-
           return {
             phaseName: phaseDetails[0],
             phaseCoin: phaseDetails[1],
-            remainingCoin: phaseDetails[2],
-            phaseTarget: phaseDetails[3],
+            remainingCoin: ethers.formatEther(phaseDetails[2]),
+            phaseTarget: ethers.formatEther(phaseDetails[3]),
             startingTime: new Date(Number(phaseDetails[4]) * 1000).toLocaleString(),
             endingTime: new Date(Number(phaseDetails[5]) * 1000).toLocaleString(),
-            coinPrice: phaseDetails[6],
+            coinPrice: ethers.formatEther(phaseDetails[6]),
             isActive: phaseDetails[7],
             collectedFund: ethers.formatEther(phaseDetails[8].toString()),
-          }
+          };
         })
       );
       setPhaseOverview(overview);
@@ -418,159 +344,372 @@ const handleCancelSeedBuyer = async (buyerAddress: string) => {
     }
   };
 
-  // Stored Address List Section
-
-  const fetchStoredAddress = async (contract) => {
+  const fetchStoredAddress = async () => {
+    if (!contract) return;
     try {
-      const storedAddress = await contract.getStoreAddress();
-      console.log(storedAddress);
-      SetStoredAddress(storedAddress);
+      const storedAddresses: string[] = await contract.getStoreAddress();
+      setStoredAddress(storedAddresses);
     } catch (error) {
       console.error("Error fetching stored address", error);
     }
-  }
+  };
+
+  const fetchRemainingTime = async () => {
+    try {
+      if (contract) {
+        const remainingTimeInSeconds = await contract.getRemainingTimeInStage();
+        const remainingTimeFormatted = formatRemainingTime(remainingTimeInSeconds);
+
+        setPhaseDetails((prevDetails) =>
+          prevDetails
+            ? { ...prevDetails, remainingTime: remainingTimeFormatted }
+            : null
+        );
+      }
+    } catch (error) {
+      console.error("Error fetching remaining time:", error);
+    }
+  };
+
+  const formatRemainingTime = (remainingTimeInSeconds: number): string => {
+    const seconds = Number(remainingTimeInSeconds);
+    if (seconds <= 0) {
+      return "Phase has ended";
+    }
+
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secondsLeft = seconds % 60;
+
+    return `${hours}h ${minutes}m ${secondsLeft}s`;
+  };
+
+  const stopSale = async () => {
+    if (!contract) return;
+  
+    try {
+      await contract.stopSale();
+      setIsPaused(true);
+      setPauseStartTime(await contract.pausedTime());
+      Swal.fire({
+        icon: 'success',
+        title: 'Sale Stopped',
+        text: 'The sale has been successfully paused.',
+      });
+    } catch (error) {
+      // Handle specific error messages
+      const errorMessage = error?.reason || error?.data?.message || error?.message;
+  
+      if (errorMessage === "Sale is already stopped") {
+        Swal.fire({
+          icon: "error",
+          title: "Sale is already stopped",
+          text: "", // No extra text
+          confirmButtonColor: "#d33",
+        });
+      } else {
+        Swal.fire({
+          icon: "error",
+          title: "Transaction Failed",
+          text: errorMessage,
+          confirmButtonColor: "#d33",
+        });
+      }
+  
+      console.error("Error stopping sale:", error);
+    }
+  };
+  
+
+  const resumeSale = async () => {
+    if (!contract || !pauseStartTime) return;
+    try {
+      await contract.resumeSale();
+      setIsPaused(false);
+      const pauseDuration = (Date.now() - pauseStartTime) / 1000; // Convert to seconds
+      setTotalPauseTime(prevTime => prevTime + pauseDuration);
+      setPauseStartTime(null);
+      Swal.fire({
+        icon: 'success',
+        title: 'Sale Resumed',
+        text: 'The sale has been successfully resumed.',
+      });
+    } catch (error) {
+      console.error("Error resuming sale", error);
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'There was an error resuming the sale. Please try again.',
+      });
+    }
+  };
+
+  const formatPauseTime = (seconds: number): string => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    return `${hours}h ${minutes}m ${remainingSeconds}s`;
+  };
+
+  // Chart data
+  const saleOverviewData: ChartData<"pie"> = {
+    labels: ['Total Collected Funds (ETH)', 'Coins Sold'],
+    datasets: [
+      {
+        data: [totalCollectedFunds, coinsSold],
+        backgroundColor: ['rgba(54, 162, 235, 0.6)', 'rgba(255, 99, 132, 0.6)'],
+      },
+    ],
+  };
+
+  const phaseOverviewData: ChartData<"bar"> = {
+    labels: phaseOverview.map(phase => phase.phaseName),
+    datasets: [
+      {
+        label: 'Collected Funds',
+        data: phaseOverview.map(phase => parseFloat((phase.collectedFund))),
+        backgroundColor: 'rgba(75, 192, 192, 0.6)',
+      },
+      {
+        label: 'Target Funds',
+        data: phaseOverview.map(phase => parseFloat(phase.phaseTarget)), // Assuming targetFund is a property in your phase data
+        backgroundColor: 'rgba(153, 102, 255, 0.6)', // Color for target funds
+      },
+    ],
+  };
 
   return (
-    <div className="min-h-screen p-6">
-      <h1 className="text-5xl font-bold text-center text-gray-900">CoinSale Admin Panel</h1>
-      {walletAddress && <p className="text-center text-lg text-gray-700 mt-2">Connected: {walletAddress}</p>}
+    // <div className="min-h-screen bg-gray-100 p-4">
+    <div className="max-w-7xl mx-auto">
+      <h1 className="text-center font-bold text-gray-800 mb-6">Admin Dashboard</h1>
 
-      <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {/* Current Phase */}
-        <div className="bg-white p-6 shadow-lg rounded-lg">
-          <h2 className="text-xl font-semibold text-slate-800">Current Phase</h2>
-          {phaseDetails ? (
-            <>
-              <p className="mt-2 text-gray-700">Phase: {phaseDetails.phaseName}</p>
-              <p className="text-gray-700">Remaining Time: {phaseDetails.remainingTime}</p>
-              <button
-                onClick={updatePhase}
-                className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-              >
-                Update Phase
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+        {/* Update, Extend, Stop, and Resume Sale */}
+        <div className="lg:col-span-1 bg-white p-4 rounded-lg shadow-sm">
+          <div className="flex flex-col space-y-4">
+            <button onClick={updatePhase} className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+              Update Phase
+            </button>
+            <div className="flex space-x-2">
+              <input
+                type="number"
+                value={extraTime}
+                onChange={(e) => setExtraTime(Number(e.target.value))}
+                className="flex-grow border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Time in seconds"
+              />
+              <button onClick={extendPhase} className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">
+                Extend Phase
               </button>
+            </div>
+            <button 
+              onClick={isPaused ? resumeSale : stopSale} 
+              className={`w-full px-4 py-2 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                isPaused 
+                  ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500' 
+                  : 'bg-red-600 hover:bg-red-700 focus:ring-red-500'
+              }`}
+            >
+              {isPaused ? 'Resume Sale' : 'Stop Sale'}
+            </button>
+            <div className="text-sm font-medium text-gray-500">
+              Total Pause Time: {formatPauseTime(Number(totalPauseTime) + (isPaused && pauseStartTime ? (Date.now() - Number(pauseStartTime)) / 1000 : 0)
+)}
 
-              <div className="mt-4 text-slate-800">
-                <input
-                  type="number"
-                  placeholder="Enter extra time in seconds"
-                  value={extraTime}
-                  onChange={(e) => setExtraTime(Number(e.target.value))}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                />
-                <button
-                  onClick={extendPhase}
-                  className="mt-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
-                >
-                  Extend Phase
-                </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Current Phase Details */}
+        <div className="lg:col-span-2 bg-white p-4 rounded-lg shadow-sm">
+          <h2 className="text-xl font-semibold mb-4 text-gray-800">Current Phase Details</h2>
+          {phaseDetails && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-sm font-medium text-gray-500">Phase Name</p>
+                <p className="text-lg font-semibold text-gray-800">{phaseDetails.phaseName}</p>
               </div>
-            </>
-          ) : (
-            <p className="text-gray-500">Loading phase details...</p>
+              <div>
+                <p className="text-sm font-medium text-gray-500">Starting Time</p>
+                <p className="text-lg font-semibold text-gray-800">{phaseDetails.startingTime}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-500">Phase Target</p>
+                <p className="text-lg font-semibold text-gray-800">{phaseDetails.phaseTarget}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-500">Ending Time</p>
+                <p className="text-lg font-semibold text-gray-800">{phaseDetails.endingTime}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-500">Remaining Coin</p>
+                <p className="text-lg font-semibold text-gray-800">{phaseDetails.remainingCoin}</p>
+              </div> 
+              <div>
+                <p className="text-sm font-medium text-gray-500">Remaining Time</p>
+                <p className="text-lg font-semibold text-gray-800">{phaseDetails.remainingTime}</p>
+              </div>
+            </div>
           )}
         </div>
-
-        {/* Buyers */}
-        <div className="bg-white p-6 shadow-lg rounded-lg">
-          <h2 className="text-xl font-semibold text-slate-800">Buyers Details</h2>
-          <ul className="mt-4">
-            {buyers.map((buyer, index) => (
-              <li key={index} className="text-gray-700 border-b py-2">
-                {buyer.buyerAddress} - Coins: {buyer.totalCoinsPurchased}, Spent: {buyer.totalAmountSpent} ETH
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {/* Seed Round Buyers */}
-        <div className="bg-white p-6 shadow-lg rounded-lg">
-          <h2 className="text-xl font-semibold text-slate-800">Seed Round Buyers</h2>
-          <ul className="mt-4">
-            {seedRoundBuyers.map((address, index) => (
-              <li key={index}
-                className="text-gray-700 border-b py-2"
-              >
-                {address}
-                <button
-                  onClick={() => handleConfirmSeedBuyer(address)}
-                  className="ml-4 px-3 py-1 bg-green-500 text-white rounded-lg"
-                >
-                  Confirm
-                </button>
-                <button
-                  onClick={() => handleCancelSeedBuyer(address)}
-                  className="ml-2 px-3 py-1 bg-red-500 text-white rounded-lg"
-                >
-                  Cancel
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {/* Confirmed Buyers List */}
-        <div className="bg-white p-6 shadow-lg rounded-lg">
-          <h2 className="text-xl font-semibold text-slate-800">Confirmed Buyers</h2>
-          <ul className="mt-4">
-            {confirmedBuyers.map((buyerAddress, index) => (
-              <li key={index} className="text-gray-700 border-b py-2">
-                {buyerAddress}
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="bg-white p-6 shadow-lg rounded-lg">
-          <h2 className="text-xl font-semibold text-slate-800">Stored Address Details</h2>
-          <ul className="mt-4">
-            {storedAddress.map((buyerAddress, index) => (
-              <li key={index}
-                className="text-gray-700 border-b py-2"
-              >
-                {buyerAddress}
-                <button
-                  onClick={() => handleConfirmSeedBuyer(buyerAddress)}
-                  className="ml-4 px-3 py-1 bg-green-500 text-white rounded-lg"
-                >
-                  Allow
-                </button>
-                <button
-                  onClick={() => handleCancelSeedBuyer(buyerAddress)}
-                  className="ml-2 px-3 py-1 bg-red-500 text-white rounded-lg"
-                >
-                  Cancel
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="bg-white p-6 shadow-lg rounded-lg">
-          <h2 className="text-xl font-semibold text-slate-800">Sale Overview</h2>
-          <ul className="mt-4">
-            {phaseOverview.map((phase, index) => (
-              <li key={index} className="text-gray-700 border-b py-2">
-                <strong>{phase.phaseName}</strong>: Allotted: {phase.phaseCoin}, Remaining: {phase.remainingCoin}, Collected Fund: {phase.collectedFund} ETH
-              </li>
-            ))}
-          </ul>
-        </div>
       </div>
-      <div className="flex items-center justify-center py-8">
-        <div className="bg-white p-6 shadow-lg rounded-lg">
-          <h2 className="text-xl font-semibold text-slate-800">Finalize Sale</h2>
-          <p className="mt-2 text-gray-700">Total Coin Sold: {coinsSold}</p>
-          <p className="mt-2 text-gray-700">Total Collected Fund: {totalCollectedFunds} ETH</p>
-          <button
-            onClick={finalizeSale}
-            className="mt-4 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
-          >
-            Finalize Sale
-          </button>
+
+      {/* Sale Overview */}
+      <div className="bg-white p-6 rounded-lg shadow-sm mb-6">
+        <h2 className="text-2xl font-semibold mb-4 text-gray-800">Sale Overview</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="col-span-2">
+            <Pie data={saleOverviewData} options={{ responsive: true, maintainAspectRatio: false }} />
+          </div>
+          <div className="flex flex-col justify-center">
+            <div className="mb-4">
+              <p className="text-sm font-medium text-gray-500">Total Collected Funds</p>
+              <p className="text-2xl font-bold text-gray-800">{totalCollectedFunds} ETH</p>
+            </div>
+            <div className="mb-4">
+              <p className="text-sm font-medium text-gray-500">Coins Sold</p>
+              <p className="text-2xl font-bold text-gray-800">{coinsSold}</p>
+            </div>
+            <div className="mb-4">
+              <p className="text-sm font-medium text-gray-500">Total Pause Time</p>
+              <p className="text-2xl font-bold text-gray-800">{formatPauseTime(totalPauseTime)}</p>
+            </div>
+            <button onClick={finalizeSale} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">
+              Finalize Sale
+            </button>
+          </div>
         </div>
       </div>
 
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        {/* Seed Round Applicants */}
+        <div className="bg-white p-6 rounded-lg shadow-sm">
+          <h2 className="text-2xl font-semibold mb-4 text-gray-800">Seed Round Applicants</h2>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Address</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {seedRoundBuyers.map((buyer, index) => (
+                  <tr key={index}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{buyer}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <button onClick={() => handleConfirmSeedBuyer(buyer)} className="text-green-600 hover:text-green-900 mr-4">Confirm</button>
+                      <button onClick={() => handleCancelSeedBuyer(buyer)} className="text-red-600 hover:text-red-900">Cancel</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Stored Addresses */}
+        <div className="bg-white p-6 rounded-lg shadow-sm">
+          <h2 className="text-2xl font-semibold mb-4 text-gray-800">Stored Addresses</h2>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Address</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {storedAddress.map((address, index) => (
+                  <tr key={index}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{address}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <button onClick={() => handleConfirmSeedBuyer(address)} className="text-green-600 hover:text-green-900 mr-4">Allow</button>
+                      <button onClick={() => handleCancelSeedBuyer(address)} className="text-red-600 hover:text-red-900">Cancel</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* Confirmed Buyers */}
+      <div className="bg-white p-6 rounded-lg shadow-sm mb-6">
+        <h2 className="text-2xl font-semibold mb-4 text-gray-800">Confirmed Buyers</h2>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Address</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {confirmedBuyers.map((buyer, index) => (
+                <tr key={index}>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{buyer}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Phase Overview */}
+      <div className="bg-white p-6 rounded-lg shadow-sm">
+        <h2 className="text-2xl font-semibold mb-4 text-gray-800">Phase Overview</h2>
+        <div className="mb-6" style={{ height: '300px' }}>
+          <Bar
+            data={phaseOverviewData}
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              scales: {
+                y: {
+                  beginAtZero: true
+                }
+              }
+            }}
+          />
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phase</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Coins</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Target</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start Time</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">End Time</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Coin Price</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Collected</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {phaseOverview.map((phase, index) => (
+                <tr key={index}>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{phase.phaseName}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{phase.phaseCoin}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{phase.phaseTarget}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{phase.startingTime}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{phase.endingTime}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{phase.coinPrice}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${phase.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                      {phase.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{phase.collectedFund}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
+  // </div>
   );
 }
+
